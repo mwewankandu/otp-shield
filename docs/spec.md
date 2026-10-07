@@ -7,13 +7,13 @@ This attack doesn't break into the carrier's network. The scammer starts a real 
 
 Many people, especially mobile money users who don't know how OTPs work, don't realise that the code is the key to their account. A real OTP arriving mid-call feels like proof that the caller is legitimate. Nothing warns the user at the moment it happens.
 
-2. Features
+## Features
 
 Detect: spot an OTP-style SMS arriving during a call with an unknown number.
 Warn: full-screen alert telling the user not to read the code aloud.
 Report: one tap sends the caller's number to a backend, with a link to ZICTA's *707# reporting.
 
-3. Out of scope
+## Out of scope
 
 No Play Store release
 No message content sent to any server
