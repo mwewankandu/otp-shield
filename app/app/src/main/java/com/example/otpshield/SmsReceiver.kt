@@ -16,7 +16,11 @@ class SmsReceiver : BroadcastReceiver() {
         val body = parts.joinToString("") { it.messageBody ?: "" }
 
         if (OtpDetector.isOtp(body)) {
-            Log.d("OtpShield", "OTP-style SMS detected from $sender")
+            if (CallState.active) {
+                Log.w("OtpShield", "ALERT: OTP arrived during a call (number known: ${CallState.number != null})")
+            } else {
+                Log.d("OtpShield", "OTP-style SMS from $sender, no call active")
+            }
         } else {
             Log.d("OtpShield", "Normal SMS from $sender")
         }
