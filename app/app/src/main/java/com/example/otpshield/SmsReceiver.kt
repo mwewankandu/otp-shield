@@ -18,6 +18,7 @@ class SmsReceiver : BroadcastReceiver() {
         if (OtpDetector.isOtp(body)) {
             if (CallState.active) {
                 Log.w("OtpShield", "ALERT: OTP arrived during a call (number known: ${CallState.number != null})")
+                AlertNotifier.show(context)
             } else {
                 Log.d("OtpShield", "OTP-style SMS from $sender, no call active")
             }
