@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
+import android.provider.Settings
 
 object AlertNotifier {
     private const val CHANNEL_ID = "otp_alert"
@@ -38,5 +39,8 @@ object AlertNotifier {
             .build()
 
         nm.notify(1, notification)
+        if (Settings.canDrawOverlays(context)) {
+            context.startActivity(intent)
+        }
     }
 }

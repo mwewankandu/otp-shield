@@ -20,6 +20,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.otpshield.ui.theme.OtpShieldTheme
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import androidx.compose.ui.platform.LocalContext
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -54,6 +58,16 @@ fun PermissionScreen(modifier: Modifier = Modifier) {
                 )
             )
         }) { Text("Grant permissions") }
+        Spacer(Modifier.height(16.dp))
+        val context = LocalContext.current
+        Button(onClick = {
+            context.startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:${context.packageName}")
+                )
+            )
+        }) { Text("Allow display over other apps") }
     }
 }
 
