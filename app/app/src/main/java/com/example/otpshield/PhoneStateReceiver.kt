@@ -11,7 +11,9 @@ class PhoneStateReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != TelephonyManager.ACTION_PHONE_STATE_CHANGED) return
 
-        when (intent.getStringExtra(TelephonyManager.EXTRA_STATE)) {
+        val state = intent.getStringExtra(TelephonyManager.EXTRA_STATE)
+
+        when (state) {
             TelephonyManager.EXTRA_STATE_RINGING,
             TelephonyManager.EXTRA_STATE_OFFHOOK -> CallState.active = true
             TelephonyManager.EXTRA_STATE_IDLE -> {
@@ -20,6 +22,11 @@ class PhoneStateReceiver : BroadcastReceiver() {
             }
         }
 
+// Only store a number while a call is live
+        if (state != TelephonyManager.EXTRA_STATE_IDLE) {
+            intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER)
+                ?.let { CallState.number = it }
+        }
         // Android often sends this broadcast twice, once without the number,
         // so only overwrite when a number is present
         intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER)
