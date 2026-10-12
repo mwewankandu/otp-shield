@@ -33,4 +33,24 @@ hCBuOTpsPmQhCBuOTpsPmQ""")
     @Test fun `ignores zamtel money receipt`() = assertFalse(
         OtpDetector.isOtp("""Dear Customer, you have received ZMW 1,500.00 from John Banda - 0970000000 on 03-10-2026 16:59:01 under Txn ID: 9ABC1DE3. Your account balance is now ZMW 4,722.93. Manage your money smarter download the MyZamtel App today!""")
     )
+
+    @Test fun `detects airtel tv otp with app hash`() = assertTrue(
+        OtpDetector.isOtp("""<#> Use 7351 as your login OTP. OTP is confidential SAlFWJEgD0F""")
+    )
+
+    @Test fun `detects yellow card otp`() = assertTrue(
+        OtpDetector.isOtp("""580273 is your Yellow Card OTP code.""")
+    )
+
+    @Test fun `detects trust bank otp`() = assertTrue(
+        OtpDetector.isOtp("""614927 is your OTP. Kindly use it within 2 minutes else it will expire - TrustB""")
+    )
+
+    @Test fun `detects shop otp`() = assertTrue(
+        OtpDetector.isOtp("""Your OTP is 392058""")
+    )
+
+    @Test fun `detects napsa otp with letter prefix`() = assertTrue(
+        OtpDetector.isOtp("""iCARE OTP: abcd-482915 Expires: 10/06/2026 17:13""")
+    )
 }
