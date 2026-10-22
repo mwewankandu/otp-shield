@@ -66,3 +66,22 @@ def create_report(report: ReportIn):
         )
         db.commit()
     return {"status": "recorded"}
+
+@app.get("/lookup")
+def lookup(number: str):
+    if len(normalize(number)) < 9:
+        raise HTTPException(status_code=422, detail="Not a valid phone number")
+
+    with closing(sqlite3.connect(DB_PATH)) as db:
+        count = db.execute(
+            "SELECT COUNT(*) FROM reports WHERE number_hash = ?",
+            (hash_number(number),),
+        ).fetchone()[0]
+
+    if count == 0:
+        status = "unknown"
+    elif count < 3:
+        status = "reported"
+    else:
+        status = "suspected"
+    return {"status": status, "reports": count}
