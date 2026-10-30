@@ -5,7 +5,7 @@ import re
 import sqlite3
 from contextlib import closing
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from pydantic import BaseModel, Field
 
 SECRET = os.environ.get("HMAC_SECRET")
@@ -20,10 +20,13 @@ def init_db():
     with closing(sqlite3.connect(DB_PATH)) as db:
         db.execute("""
             CREATE TABLE IF NOT EXISTS reports (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                number_hash TEXT NOT NULL,
-                scam_type   TEXT NOT NULL,
-                reported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                number_hash  TEXT NOT NULL,
+                device_hash  TEXT NOT NULL,
+                scam_type    TEXT NOT NULL,
+                reported_day TEXT NOT NULL DEFAULT (date('now')),
+                reported_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (number_hash, device_hash, reported_day)
             )
         """)
         db.commit()
@@ -33,19 +36,20 @@ init_db()
 
 
 def normalize(number: str) -> str:
-    # Keep digits only, then turn 097... or 260... into one format
     digits = re.sub(r"\D", "", number)
     if digits.startswith("0"):
         digits = "260" + digits[1:]
     return digits
 
 
-def hash_number(number: str) -> str:
-    return hmac.new(SECRET.encode(), normalize(number).encode(), hashlib.sha256).hexdigest()
+def keyed_hash(prefix: str, value: str) -> str:
+    # The prefix keeps number hashes and device hashes in separate "families"
+    return hmac.new(SECRET.encode(), f"{prefix}:{value}".encode(), hashlib.sha256).hexdigest()
 
 
 class ReportIn(BaseModel):
     number: str = Field(min_length=7, max_length=20)
+    device_id: str = Field(min_length=16, max_length=64)
     scam_type: str = "otp_prize"
 
 
@@ -55,27 +59,34 @@ def health():
 
 
 @app.post("/reports", status_code=201)
-def create_report(report: ReportIn):
-    if len(normalize(report.number)) < 9:
+def create_report(report: ReportIn, response: Response):
+    number = normalize(report.number)
+    if len(number) < 9:
         raise HTTPException(status_code=422, detail="Not a valid phone number")
 
     with closing(sqlite3.connect(DB_PATH)) as db:
-        db.execute(
-            "INSERT INTO reports (number_hash, scam_type) VALUES (?, ?)",
-            (hash_number(report.number), report.scam_type),
+        cur = db.execute(
+            "INSERT OR IGNORE INTO reports (number_hash, device_hash, scam_type) VALUES (?, ?, ?)",
+            (keyed_hash("number", number), keyed_hash("device", report.device_id), report.scam_type),
         )
         db.commit()
+
+    if cur.rowcount == 0:
+        response.status_code = 200
+        return {"status": "already_reported_today"}
     return {"status": "recorded"}
+
 
 @app.get("/lookup")
 def lookup(number: str):
-    if len(normalize(number)) < 9:
+    n = normalize(number)
+    if len(n) < 9:
         raise HTTPException(status_code=422, detail="Not a valid phone number")
 
     with closing(sqlite3.connect(DB_PATH)) as db:
         count = db.execute(
-            "SELECT COUNT(*) FROM reports WHERE number_hash = ?",
-            (hash_number(number),),
+            "SELECT COUNT(DISTINCT device_hash) FROM reports WHERE number_hash = ?",
+            (keyed_hash("number", n),),
         ).fetchone()[0]
 
     if count == 0:
@@ -84,4 +95,4 @@ def lookup(number: str):
         status = "reported"
     else:
         status = "suspected"
-    return {"status": status, "reports": count}
+    return {"status": status, "reporting_devices": count}
