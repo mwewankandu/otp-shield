@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OtpShield Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; background: #f4f5f7; color: #1b1b1f; }
+  header { background: #b00020; color: #fff; padding: 20px 24px; }
+  header h1 { margin: 0; font-size: 22px; }
+  header p { margin: 4px 0 0; opacity: .85; font-size: 14px; }
+  main { max-width: 1000px; margin: 0 auto; padding: 24px; display: grid; gap: 16px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
+  .card { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .big { font-size: 36px; font-weight: 700; color: #b00020; }
+  .label { font-size: 13px; color: #666; }
+  .row { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+  @media (max-width: 700px) { .row { grid-template-columns: 1fr; } }
+  .chartbox { position: relative; height: 260px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px; border-bottom: 1px solid #eee; font-size: 14px; }
+  h2 { margin: 0 0 12px; font-size: 16px; }
+  #status { font-size: 12px; color: #666; text-align: right; }
+</style>
+</head>
+<body>
+<header>
+  <h1>OtpShield: scam reports</h1>
+  <p>OTP prize-scam calls reported by users. Numbers are masked and stored only as keyed hashes.</p>
+</header>
+<main>
+  <div class="cards">
+    <div class="card"><div class="big" id="total">0</div><div class="label">Total reports</div></div>
+    <div class="card"><div class="big" id="numbers">0</div><div class="label">Distinct scam numbers</div></div>
+  </div>
+
+  <div class="row">
+    <div class="card"><h2>Reports per day</h2><div class="chartbox"><canvas id="dayChart"></canvas></div></div>
+    <div class="card"><h2>By carrier</h2><div class="chartbox"><canvas id="carrierChart"></canvas></div></div>
+  </div>
+
+  <div class="card">
+    <h2>Most reported numbers</h2>
+    <table>
+      <thead><tr><th>Number</th><th>Carrier</th><th>Devices reporting</th></tr></thead>
+      <tbody id="top"></tbody>
+    </table>
+  </div>
+  <div id="status">Loading...</div>
+</main>
+
+<script>
+let dayChart = null;
+let carrierChart = null;
+const carrierColors = {
+  Zamtel: '#2e7d32',  // green
+  Airtel: '#e53935',  // red
+  MTN: '#fdd835',     // yellow
+  Other: '#9e9e9e'    // grey for unlisted prefixes
+};
+const colorFor = name => carrierColors[name] || '#9e9e9e';
+
+function draw(s) {
+  document.getElementById('total').textContent = s.total_reports;
+  document.getElementById('numbers').textContent = s.distinct_numbers;
+
+  const days = s.per_day.map(d => d.day);
+  const counts = s.per_day.map(d => d.reports);
+  if (!dayChart) {
+    dayChart = new Chart(document.getElementById('dayChart'), {
+      type: 'bar',
+      data: { labels: days, datasets: [{ data: counts, backgroundColor: '#b00020' }] },
+      options: {
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+      }
+    });
+  } else {
+    dayChart.data.labels = days;
+    dayChart.data.datasets[0].data = counts;
+    dayChart.update();
+  }
+
+  const names = s.by_carrier.map(c => c.carrier);
+  const totals = s.by_carrier.map(c => c.reports);
+  const sliceColors = names.map(colorFor);
+  if (!carrierChart) {
+    carrierChart = new Chart(document.getElementById('carrierChart'), {
+      type: 'doughnut',
+      data: { labels: names, datasets: [{ data: totals, backgroundColor: sliceColors }] },
+      options: { maintainAspectRatio: false }
+    });
+  } else {
+    carrierChart.data.labels = names;
+    carrierChart.data.datasets[0].data = totals;
+    carrierChart.data.datasets[0].backgroundColor = sliceColors;
+    carrierChart.update();
+  }
+
+  const body = document.getElementById('top');
+  body.replaceChildren();
+  for (const t of s.top_numbers) {
+    const tr = document.createElement('tr');
+    for (const value of [t.number, t.carrier, t.devices]) {
+      const td = document.createElement('td');
+      td.textContent = value;
+      tr.appendChild(td);
+    }
+    body.appendChild(tr);
+  }
+}
+
+async function load() {
+  const status = document.getElementById('status');
+  try {
+    const res = await fetch('/stats');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    draw(await res.json());
+    status.textContent = 'Updated ' + new Date().toLocaleTimeString();
+  } catch (e) {
+    status.textContent = 'Cannot reach the server: ' + e.message;
+  }
+}
+
+load();
+setInterval(load, 10000);
+</script>
+</body>
+</html>

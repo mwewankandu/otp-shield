@@ -3,6 +3,8 @@ import hmac
 import os
 import re
 import sqlite3
+from pathlib import Path
+from fastapi.responses import FileResponse
 from contextlib import closing
 
 from fastapi import FastAPI, HTTPException, Response
@@ -14,6 +16,11 @@ if not SECRET:
 
 DB_PATH = "reports.db"
 app = FastAPI()
+
+@app.get("/dashboard")
+def dashboard():
+    # Path(__file__) is this file's own location, so it works from any folder
+    return FileResponse(Path(__file__).parent / "dashboard.html")
 
 # First two digits after 260 -> carrier
 CARRIERS = {
