@@ -218,7 +218,3 @@ def stats():
 @app.get("/dashboard", dependencies=[Depends(require_admin)])
 def dashboard():
     return FileResponse(Path(__file__).parent / "dashboard.html")
-
-@app.get("/whoami")
-def whoami(request: Request):
-    return {"ip_seen": client_ip(request)}
