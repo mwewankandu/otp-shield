@@ -6,10 +6,12 @@ import secrets
 from pathlib import Path
 
 import psycopg
-from fastapi import Depends, FastAPI, HTTPException, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel, Field
+import time
+from collections import defaultdict, deque
 
 
 def require_env(name: str) -> str:
@@ -32,6 +34,44 @@ CARRIERS = {
     "96": "MTN", "76": "MTN",
     "97": "Airtel", "77": "Airtel",
 }
+
+# --- Rate limiting: at most RATE_LIMIT requests per IP per hour ---
+RATE_LIMIT = int(os.environ.get("RATE_LIMIT", "30"))
+WINDOW_SECONDS = 3600
+_hits: dict[str, deque] = defaultdict(deque)
+
+
+def client_ip(request: Request) -> str:
+    # Cloudflare sets these headers; a client cannot forge them.
+    return (
+        request.headers.get("cf-connecting-ip")
+        or request.headers.get("true-client-ip")
+        or (request.client.host if request.client else "unknown")
+    )
+
+
+def rate_limit(request: Request):
+    ip = client_ip(request)
+    now = time.monotonic()
+    hits = _hits[ip]
+
+    # forget requests older than the window
+    while hits and now - hits[0] > WINDOW_SECONDS:
+        hits.popleft()
+
+    if len(hits) >= RATE_LIMIT:
+        retry = int(WINDOW_SECONDS - (now - hits[0])) + 1
+        raise HTTPException(
+            status_code=429,
+            detail="Too many requests. Try again later.",
+            headers={"Retry-After": str(retry)},
+        )
+    hits.append(now)
+
+    # keep memory small: drop IPs with no recent requests
+    if len(_hits) > 10_000:
+        for key in [k for k, v in _hits.items() if not v]:
+            del _hits[key]
 
 
 def require_admin(credentials: HTTPBasicCredentials = Depends(security)):
@@ -98,7 +138,7 @@ def health():
     return {"status": "ok"}
 
 
-@app.post("/reports", status_code=201)
+@app.post("/reports", status_code=201, dependencies=[Depends(rate_limit)])
 def create_report(report: ReportIn, response: Response):
     number = normalize(report.number)
     if len(number) < 9:
@@ -126,7 +166,7 @@ def create_report(report: ReportIn, response: Response):
     return {"status": "recorded"}
 
 
-@app.get("/lookup")
+@app.get("/lookup", dependencies=[Depends(rate_limit)])
 def lookup(number: str):
     n = normalize(number)
     if len(n) < 9:
@@ -178,3 +218,7 @@ def stats():
 @app.get("/dashboard", dependencies=[Depends(require_admin)])
 def dashboard():
     return FileResponse(Path(__file__).parent / "dashboard.html")
+
+@app.get("/whoami")
+def whoami(request: Request):
+    return {"ip_seen": client_ip(request)}
